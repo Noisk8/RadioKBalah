@@ -1,6 +1,6 @@
 ---
-/* 
-  This layout is used in 
+/*
+  This layout is used in
   - pages/index.astro
   - pages/blog.astro
   - pages/projects.astro
@@ -16,7 +16,7 @@ import Favicon from "./Favicon.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import MiniRadioBar from "../components/MiniRadioBar.astro";
-import Analytics from '@vercel/analytics/astro'
+
 
 // Props para título y descripción
 interface Props {
@@ -35,7 +35,8 @@ const {
 
 // URL canónica para las metaetiquetas
 const canonicalURL = new URL(Astro.url.pathname, Astro.site || 'https://radiovolketainterestelar.com');
-const showMiniPlayer = Astro.url.pathname !== "/";
+const isHomePage = Astro.url.pathname === "/" || /^\/(es|en|fr)\/?$/.test(Astro.url.pathname);
+const showMiniPlayer = !isHomePage;
 ---
 
 <!DOCTYPE html>
@@ -51,14 +52,14 @@ const showMiniPlayer = Astro.url.pathname !== "/";
     <ThemeScript />
     <FontAwesome />
     <!-- Analytics component removed -->
-    
+
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonicalURL} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={new URL('/rvi.png', Astro.site || 'https://radiovolketainterestelar.com')} />
-    
+
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image" />
     <meta property="twitter:url" content={canonicalURL} />
@@ -84,11 +85,11 @@ const showMiniPlayer = Astro.url.pathname !== "/";
       </div>
     </div>
     {/* Always render; visibility toggled client-side for SPA nav */}
-    <MiniRadioBar />
+    <MiniRadioBar initiallyHidden={!showMiniPlayer} />
     <script is:inline>
       (async () => {
-        try {
-          if (!window.__swup) {
+        if (!window.__swup) {
+          try {
             const mod = await import('https://unpkg.com/swup@4?module');
             const headMod = await import('https://unpkg.com/@swup/head-plugin@2?module');
             const Swup = mod.default || mod;
@@ -106,13 +107,14 @@ const showMiniPlayer = Astro.url.pathname !== "/";
               resumeIfWanted();
               updateMiniPlayerVisibility();
             });
+          } catch (e) {
+            console.debug('Swup not initialized', e);
           }
-          // Initial bind
-          setupMediaGuards(document);
-          updateMiniPlayerVisibility();
-        } catch (e) {
-          console.debug('Swup not initialized', e);
         }
+
+        // Initial bind must work even when the optional Swup CDN is unavailable.
+        setupMediaGuards(document);
+        updateMiniPlayerVisibility();
       })();
 
       function setupMediaGuards(root) {
@@ -194,10 +196,24 @@ const showMiniPlayer = Astro.url.pathname !== "/";
       }
 
       function updateMiniPlayerVisibility() {
-        const onHome = location.pathname === '/';
         const bar = document.querySelector('.mini-radio');
-        if (bar) bar.classList.toggle('is-hidden', onHome);
-        document.body.classList.toggle('has-mini-player', !onHome);
+        const player = document.querySelector('.radio-shell');
+        window.__miniPlayerObserver?.disconnect();
+
+        if (!bar) return;
+        if (!player) {
+          bar.classList.remove('is-hidden');
+          document.body.classList.add('has-mini-player');
+          return;
+        }
+
+        document.body.classList.remove('has-mini-player');
+        window.__miniPlayerObserver = new IntersectionObserver(([entry]) => {
+          const shouldShow = !entry.isIntersecting;
+          bar.classList.toggle('is-hidden', !shouldShow);
+          document.body.classList.toggle('has-mini-player', shouldShow);
+        }, { threshold: 0 });
+        window.__miniPlayerObserver.observe(player);
       }
     </script>
   </body>

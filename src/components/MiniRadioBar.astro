@@ -1,10 +1,14 @@
 ---
 // Minimal live radio bar fixed at bottom
-const STATUS_URL = "https://stream.noisk8.xyz/status-json.xsl";
 const STREAM_URL = "https://stream.noisk8.xyz/radio.ogg";
+interface Props {
+  initiallyHidden?: boolean;
+}
+
+const { initiallyHidden = false } = Astro.props;
 ---
 
-<div class="mini-radio" role="region" aria-label="Radio en vivo">
+<div class:list={["mini-radio", { "is-hidden": initiallyHidden }]} role="region" aria-label="Radio en vivo">
   <button id="mini-toggle" class="mini-btn" aria-label="Reproducir radio">
     <span class="mini-icon" aria-hidden="true"></span>
   </button>
@@ -25,7 +29,7 @@ const STREAM_URL = "https://stream.noisk8.xyz/radio.ogg";
 </script>
 
 <script is:inline>
-  const STATUS_URL = "https://stream.noisk8.xyz/status-json.xsl";
+  const STATUS_URL = "/api/getCurrentSong";
   const STREAM_URL = "https://stream.noisk8.xyz/radio.ogg";
   const audio = document.getElementById('mini-audio');
   const btn = document.getElementById('mini-toggle');
@@ -49,16 +53,15 @@ const STREAM_URL = "https://stream.noisk8.xyz/radio.ogg";
     try {
       const r = await fetch(STATUS_URL, { cache: 'no-store' });
       if (!r.ok) throw new Error('status');
-      const j = await r.json();
-      const s = Array.isArray(j?.icestats?.source) ? j.icestats.source[0] : j?.icestats?.source || j;
-      const online = !!s;
+      const s = await r.json();
+      const online = Boolean(s.online);
       setStateLive(online);
-      if (online) {
-        song.textContent = s.title || '';
-        artist.textContent = s.artist ? ` — ${s.artist}` : '';
-      }
+      song.textContent = online ? s.title || '' : '';
+      artist.textContent = online && s.artist ? ` — ${s.artist}` : '';
     } catch {
       setStateLive(false);
+      song.textContent = '';
+      artist.textContent = '';
     }
   }
 

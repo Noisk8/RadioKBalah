@@ -103,9 +103,7 @@ try {
           type="button"
           aria-label="Reproducir"
         >
-          <span class="player-symbol">
-            <span class="player-icon" aria-hidden="true"></span>
-          </span>
+          <span class="player-icon" aria-hidden="true"></span>
           <span class="player-label">Play</span>
         </button>
 
@@ -133,7 +131,7 @@ try {
 <client:load>
   <script type="module">
     // Client-side: usar endpoints directos (sin import.meta.env)
-    const STATUS_URL = "https://stream.noisk8.xyz/status-json.xsl";
+    const STATUS_URL = "/api/getCurrentSong";
     const STREAM_URL = "https://stream.noisk8.xyz/radio.ogg";
     const player = document.getElementById("radio-player");
     const titleEl = document.getElementById("song-title");
@@ -182,10 +180,7 @@ try {
     const updateLiveBadge = (state) => {
       if (!remainingLabel) return;
       if (state === "live") {
-        const promptPlay = streamAvailable && !isPlaybackLive && player?.paused;
-        remainingLabel.textContent = promptPlay
-          ? `${LIVE_INDICATOR_TEXT} · Presiona Play`
-          : LIVE_INDICATOR_TEXT;
+        remainingLabel.textContent = LIVE_INDICATOR_TEXT;
         remainingLabel.classList.add("live-active");
         remainingLabel.classList.remove("live-offline");
       } else if (state === "offline") {
@@ -213,7 +208,7 @@ try {
       const { duration } = player;
       const durationIsFinite = Number.isFinite(duration) && duration > 0;
       const durationIsUnknown = Number.isNaN(duration);
-      const live = !durationIsUnknown && !Number.isFinite(duration);
+      const live = streamAvailable || (!durationIsUnknown && !Number.isFinite(duration));
       const offline = durationIsUnknown || duration <= 0;
 
       isPlaybackLive = live && !player?.paused;
@@ -227,32 +222,20 @@ try {
         }
       }
 
-      if (remainingLabel) {
-        if (live || streamAvailable) {
-          updateLiveBadge("live");
-        } else if (offline) {
-          updateLiveBadge("offline");
-        } else {
-          remainingLabel.textContent = formatTime(duration);
-          remainingLabel.classList.remove("live-active");
-          remainingLabel.classList.remove("live-offline");
-        }
-      }
+      if (remainingLabel) updateLiveBadge(live ? "live" : "offline");
     };
 
     const updateProgressUI = (fromSlider = false) => {
       if (!player) return;
       const current = fromSlider && progressInput ? Number(progressInput.value) : player.currentTime;
 
-      if (elapsedLabel) {
-        elapsedLabel.textContent = formatTime(current);
-      }
+      if (elapsedLabel) elapsedLabel.textContent = formatTime(current);
 
-      if (isPlaybackLive) {
+      if (isPlaybackLive || streamAvailable) {
         updateLiveBadge("live");
         if (progressFill) {
-          const fraction = (player.currentTime % 8) / 8;
-          progressFill.style.transform = `scaleX(${0.2 + fraction * 0.8})`;
+          const fraction = isPlaybackLive ? (player.currentTime % 8) / 8 : 0;
+          progressFill.style.transform = isPlaybackLive ? `scaleX(${0.2 + fraction * 0.8})` : "scaleX(0)";
         }
         return;
       }
@@ -276,12 +259,7 @@ try {
       if (progressInput && !fromSlider) {
         progressInput.value = current.toString();
       }
-      if (remainingLabel) {
-        const remaining = Math.max(duration - current, 0);
-        remainingLabel.textContent = formatTime(remaining);
-        remainingLabel.classList.remove("live-active");
-        remainingLabel.classList.remove("live-offline");
-      }
+      updateLiveBadge("offline");
     };
 
     const updateToggleLabel = () => {
@@ -289,14 +267,14 @@ try {
       const isPaused = player.paused;
       const actionLabel = isPaused
         ? `Reproducir${streamAvailable ? " transmisión en vivo" : ""}`
-        : "Detener transmisión";
+        : "Pausar reproducción";
       toggleButton.setAttribute("aria-label", actionLabel);
       toggleButton.classList.toggle("is-playing", !isPaused);
       if (labelSpan) {
         if (isPaused) {
-          labelSpan.textContent = streamAvailable ? "Play En Vivo" : "Play";
+          labelSpan.textContent = "Reproducir";
         } else {
-          labelSpan.textContent = "Stop";
+          labelSpan.textContent = "Pausar";
         }
       }
       updateProgressUI();
@@ -361,7 +339,11 @@ try {
         if (r.ok) {
           const j = await r.json();
           const s = pickSource(j) || j;
-          if (s) return { title: s.title || "", artist: s.artist || "", online: true };
+          if (s) return {
+            title: s.title || "",
+            artist: s.artist || "",
+            online: Boolean(s.online),
+          };
         }
       } catch {}
       return { title: "", artist: "", online: false };
@@ -383,20 +365,20 @@ try {
           setLiveState(false);
         }
 
-        if (payload && (payload.title || payload.artist)) {
-          if (titleEl && payload.title && payload.title !== currentTitle) {
-            titleEl.textContent = payload.title;
-            titleEl.classList.add("text-highlight");
-            setTimeout(() => titleEl.classList.remove("text-highlight"), 600);
-            currentTitle = payload.title;
-          }
+        const nextTitle = payload?.online ? payload.title : "";
+        const nextArtist = payload?.online ? payload.artist : "";
+        if (titleEl && nextTitle !== currentTitle) {
+          titleEl.textContent = nextTitle;
+          titleEl.classList.add("text-highlight");
+          setTimeout(() => titleEl.classList.remove("text-highlight"), 600);
+          currentTitle = nextTitle;
+        }
 
-          if (artistEl && payload.artist && payload.artist !== currentArtist) {
-            artistEl.textContent = payload.artist;
-            artistEl.classList.add("text-highlight");
-            setTimeout(() => artistEl.classList.remove("text-highlight"), 600);
-            currentArtist = payload.artist;
-          }
+        if (artistEl && nextArtist !== currentArtist) {
+          artistEl.textContent = nextArtist;
+          artistEl.classList.add("text-highlight");
+          setTimeout(() => artistEl.classList.remove("text-highlight"), 600);
+          currentArtist = nextArtist;
         }
       } catch (error) {
         console.error("No se pudo refrescar la canción", error);
@@ -629,7 +611,7 @@ try {
 
   .timeline-row {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 1rem;
   }
@@ -705,11 +687,12 @@ try {
   }
 
   .live-indicator.live-active {
-    background: rgb(232 82 74 / 0.9);
-    color: rgb(255 248 235 / 1);
-    box-shadow: 4px 4px 0 rgba(232, 82, 74, 0.28);
+    background: rgb(232 82 74 / 0.12);
+    color: rgb(190 62 54 / 1);
+    border-color: rgb(232 82 74 / 0.32);
+    box-shadow: none;
     gap: 0.35rem;
-    padding-inline: 1rem;
+    padding-inline: 0.7rem;
   }
 
   .live-indicator.live-active::before {
@@ -718,7 +701,7 @@ try {
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 999px;
-    background: currentColor;
+    background: rgb(232 82 74 / 1);
   }
 
   .live-indicator.live-offline {
@@ -759,40 +742,35 @@ try {
     outline-offset: 4px;
   }
 
-  .player-symbol {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.2rem;
-    height: 2.2rem;
-    border-radius: 0.9rem;
-    border: 1.5px solid rgb(var(--color-border-ink));
-    background: rgb(var(--color-bg-body));
-    box-shadow: 4px 4px 0 rgba(var(--shadow-soft) / 0.16);
-    transition: background 0.2s ease, border-color 0.2s ease;
-  }
-
   .player-icon {
-    display: inline-block;
+    display: block;
+    flex: 0 0 1rem;
     width: 0;
     height: 0;
-    border-style: solid;
-    border-width: 8px 0 8px 13px;
-    border-color: transparent transparent transparent rgb(var(--color-border-ink));
-    transition: border-width 0.2s ease, width 0.2s ease, height 0.2s ease, background 0.2s ease;
+    margin-left: 0.12rem;
+    border-top: 0.48rem solid transparent;
+    border-bottom: 0.48rem solid transparent;
+    border-left: 0.68rem solid currentColor;
+    transition: width 0.2s ease, height 0.2s ease, border-width 0.2s ease, margin 0.2s ease;
   }
 
   .player-control.is-playing .player-icon {
-    border-width: 0;
-    width: 13px;
-    height: 13px;
-    border-radius: 0.25rem;
-    background: rgb(var(--color-border-ink));
+    width: 0.68rem;
+    height: 0.72rem;
+    flex-basis: 0.68rem;
+    margin-left: 0;
+    border: 0;
+    background: linear-gradient(
+      to right,
+      currentColor 0 0.18rem,
+      transparent 0.18rem 0.5rem,
+      currentColor 0.5rem 0.68rem
+    );
   }
 
   .player-label {
     font-size: 0.75rem;
-    letter-spacing: 0.26em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
     color: currentColor;
   }
@@ -803,26 +781,10 @@ try {
     color: var(--player-accent-ink);
   }
 
-  .player-control.is-live .player-symbol {
-    background: rgb(255 253 245 / 0.9);
-  }
-
-  .player-control.is-live .player-icon {
-    border-color: transparent transparent transparent var(--player-accent-ink);
-  }
-
-  .player-control.is-live.is-playing .player-icon {
-    background: var(--player-accent-ink);
-  }
-
   .player-control.is-offline {
     background: var(--player-accent);
     box-shadow: 6px 6px 0 var(--player-accent-shadow);
     color: var(--player-accent-ink);
-  }
-
-  .player-control.is-offline .player-symbol {
-    background: rgb(var(--color-bg-card));
   }
 
   .player-control[data-live="off"]:hover,

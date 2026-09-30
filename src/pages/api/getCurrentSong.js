@@ -6,15 +6,15 @@ function pickSource(payload) {
   if (!payload) return undefined;
 
   // Icecast status-json.xsl format
-  if (payload.icestats?.source) {
-    return Array.isArray(payload.icestats.source)
-      ? payload.icestats.source[0]
-      : payload.icestats.source;
+  if (payload.icestats) {
+    const source = payload.icestats.source;
+    return Array.isArray(source) ? source[0] : source || undefined;
   }
 
   // SHOUTcast/Icecast alternative payloads
   if (payload.sources) {
-    return Array.isArray(payload.sources) ? payload.sources[0] : payload.sources;
+    const source = Array.isArray(payload.sources) ? payload.sources[0] : payload.sources;
+    return source || undefined;
   }
 
   // Some APIs expose now_playing info
@@ -22,7 +22,10 @@ function pickSource(payload) {
     return payload.now_playing;
   }
 
-  return payload;
+  // Accept flat metadata responses, but not status objects without a source.
+  if (payload.title || payload.song || payload.track || payload.artist || payload.performer || payload.author) {
+    return payload;
+  }
 }
 
 export async function get() {
