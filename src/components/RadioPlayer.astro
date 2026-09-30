@@ -60,9 +60,9 @@ try {
         preload="none"
         crossorigin="anonymous"
       >
-        <source src="https://stream.noisk8.xyz/kbalahradio.ogg" type="audio/mpeg" />
+        <source src="https://stream.noisk8.xyz/radio.ogg" type="audio/mpeg" />
       </audio>
-    
+
 
     <div class="player-foot">
       <div class="timeline-row">
@@ -90,7 +90,7 @@ try {
           <span class="np-dot" aria-hidden="true"></span>
           <span class="np-text">
             <span id="song-title">{current.title}</span>
-      
+
             <span id="artist-name">{current.artist}</span>
           </span>
         </div>
@@ -134,7 +134,7 @@ try {
   <script type="module">
     // Client-side: usar endpoints directos (sin import.meta.env)
     const STATUS_URL = "https://stream.noisk8.xyz/status-json.xsl";
-    const STREAM_URL = "https://stream.noisk8.xyz/kbalahradio.ogg";
+    const STREAM_URL = "https://stream.noisk8.xyz/radio.ogg";
     const player = document.getElementById("radio-player");
     const titleEl = document.getElementById("song-title");
     const artistEl = document.getElementById("artist-name");

@@ -1,5 +1,5 @@
 export const prerender = false;
-const STREAM_URL = 'https://stream.noisk8.xyz/kbalahradio.ogg';
+const STREAM_URL = 'https://stream.noisk8.xyz/radio.ogg';
 
 export async function get() {
   // Prevent static build from hanging: return fast during SSR build
