@@ -29,7 +29,7 @@ const { initiallyHidden = false } = Astro.props;
 </script>
 
 <script is:inline>
-  const STATUS_URL = "/api/getCurrentSong";
+  const STATUS_URL = "https://stream.noisk8.xyz/status-json.xsl";
   const STREAM_URL = "https://stream.noisk8.xyz/radio.ogg";
   const audio = document.getElementById('mini-audio');
   const btn = document.getElementById('mini-toggle');
@@ -52,13 +52,22 @@ const { initiallyHidden = false } = Astro.props;
   async function fetchStatus() {
     try {
       const r = await fetch(STATUS_URL, { cache: 'no-store' });
-      if (!r.ok) throw new Error('status');
-      const s = await r.json();
-      const online = Boolean(s.online);
+      if (!r.ok) throw new Error(`Estado del stream: ${r.status}`);
+      const payload = await r.json();
+      const source = payload?.icestats?.source || payload?.sources || payload?.now_playing;
+      const track = source
+        ? Array.isArray(source) ? source[0] : source
+        : payload?.title || payload?.song || payload?.track || payload?.artist
+          ? payload
+          : undefined;
+      const s = track || payload;
+      const online = typeof s.online === 'boolean' ? s.online : Boolean(track);
       setStateLive(online);
-      song.textContent = online ? s.title || '' : '';
-      artist.textContent = online && s.artist ? ` — ${s.artist}` : '';
-    } catch {
+      song.textContent = online ? s.title || s.song || s.track || '' : '';
+      const trackArtist = s.artist || s.performer || s.author;
+      artist.textContent = online && trackArtist ? ` - ${trackArtist}` : '';
+    } catch (error) {
+      console.error('No se pudieron obtener los metadatos del stream', error);
       setStateLive(false);
       song.textContent = '';
       artist.textContent = '';
@@ -116,4 +125,3 @@ const { initiallyHidden = false } = Astro.props;
     .mini-title { font-size: .9rem; }
   }
 </style>
-
